@@ -1,4 +1,4 @@
-module github.com/igolaizola/ffui
+module github.com/igolaizola/webcli
 
 go 1.22
 

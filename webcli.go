@@ -1,4 +1,4 @@
-package ffui
+package webcli
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/igolaizola/ffui/view"
+	"github.com/igolaizola/webcli/view"
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/pkg/browser"
 )
@@ -23,7 +23,7 @@ type parsedCommand struct {
 	Description string
 }
 
-// Server serves the ffui server.
+// Server serves the webcli server.
 func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort int) error {
 	// Get all commands including subcommands
 	parsed := parseCommands(cmds, "")

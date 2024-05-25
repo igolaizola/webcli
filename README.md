@@ -1,6 +1,6 @@
-# ffui
+# webcli
 
-**ffui** is a tool to generate an automatic web UI on top of a CLI
+**webcli** is a tool to generate an automatic web UI on top of a CLI
 
 ## Requirements
 

@@ -1,4 +1,4 @@
-package ffui
+package webcli
 
 import (
 	"context"
