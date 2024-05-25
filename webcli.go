@@ -208,6 +208,14 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 			if k == "command" {
 				continue
 			}
+			// Convert checkbox on/off to true/false
+			value := v[0]
+			switch value {
+			case "on":
+				value = "true"
+			case "off":
+				value = "false"
+			}
 			args = append(args, fmt.Sprintf("-%s=%s", k, v[0]))
 		}
 		if err := cmd.Command.Parse(args); err != nil {
