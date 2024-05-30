@@ -2,7 +2,6 @@ package webcli
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -11,27 +10,72 @@ import (
 	"sync"
 	"time"
 
-	"github.com/igolaizola/webcli/view"
-	"github.com/peterbourgon/ff/v3/ffcli"
-	"github.com/pkg/browser"
+	"github.com/igolaizola/webcli/pkg/view"
+)
+
+type Command struct {
+	Fields      []*Field
+	Name        string
+	Description string
+	Subcommands []*Command
+}
+
+type Field struct {
+	Name        string
+	Default     string
+	Description string
+	Type        FieldType
+}
+
+type FieldType int
+
+const (
+	Text FieldType = iota
+	Number
+	Boolean
 )
 
 type parsedCommand struct {
-	Command     *ffcli.Command
-	Fields      []view.Field
+	Fields      []*Field
 	Name        string
 	Description string
 }
 
+type Config struct {
+	App      string
+	Commands []*Command
+	Address  string
+}
+
+type Server struct {
+	Handler http.Handler
+	Port    int
+
+	customAddr string
+	cancel     context.CancelFunc
+	httpServer *http.Server
+}
+
 // Server serves the webcli server.
-func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort int) error {
-	// Get all commands including subcommands
-	parsed := parseCommands(cmds, "")
+func New(cfg *Config) (*Server, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	app := "WebCLI"
+	if cfg.App != "" {
+		app = cfg.App
+	}
+	customAddress := ":0"
+	if cfg.Address != "" {
+		customAddress = cfg.Address
+	}
+
+	// Convert command tree to a flat list
+	parsedCmds := parseCommands(cfg.Commands, "")
 
 	// Create lookup and name list
 	var cmdLookup = map[string]*parsedCommand{}
 	var cmdNames []string
-	for _, cmd := range parsed {
+	for _, cmd := range parsedCmds {
 		cmdLookup[cmd.Name] = cmd
 		cmdNames = append(cmdNames, cmd.Name)
 	}
@@ -51,7 +95,7 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 		}
 		v := view.List(app, cmds)
 		if err := v.Render(r.Context(), w); err != nil {
-			log.Println("couldn't render view:", err)
+			log.Println("webcli: couldn't render view:", err)
 		}
 	}))
 
@@ -60,9 +104,27 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 		path := fmt.Sprintf("/commands/%s", name)
 		mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("HX-Push-Url", path)
-			v := view.Form(app, name, cmd.Fields)
+			var fields []view.Field
+			for _, f := range cmd.Fields {
+				t := view.Text
+				switch f.Type {
+				case Number:
+					t = view.Number
+				case Boolean:
+					t = view.Boolean
+				}
+				vf := view.Field{
+					Name:        f.Name,
+					Default:     f.Default,
+					Description: f.Description,
+					Type:        t,
+				}
+
+				fields = append(fields, vf)
+			}
+			v := view.Form(app, name, fields)
 			if err := v.Render(r.Context(), w); err != nil {
-				log.Println("couldn't render view:", err)
+				log.Println("webcli: couldn't render view:", err)
 			}
 		}))
 	}
@@ -147,7 +209,7 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 		}
 		v := view.ListLog(app, logs)
 		if err := v.Render(r.Context(), w); err != nil {
-			log.Println("couldn't render view:", err)
+			log.Println("webcli: couldn't render view:", err)
 		}
 	}))
 
@@ -166,7 +228,7 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 		w.Header().Set("HX-Push-Url", fmt.Sprintf("/logs/%s", id))
 		v := view.Log(app, id, proc.Logs())
 		if err := v.Render(r.Context(), w); err != nil {
-			log.Println("couldn't render view:", err)
+			log.Println("webcli: couldn't render view:", err)
 		}
 	}
 	mux.Handle("/logs/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,12 +260,7 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 			httpError(w, "command field is empty", http.StatusBadRequest)
 			return
 		}
-		cmd, ok := cmdLookup[r.FormValue("command")]
-		if !ok {
-			httpError(w, "command not found", http.StatusBadRequest)
-			return
-		}
-		args := []string{r.FormValue("command")}
+		args := []string{cmdName}
 		for k, v := range r.Form {
 			if k == "command" {
 				continue
@@ -217,10 +274,6 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 				value = "false"
 			}
 			args = append(args, fmt.Sprintf("-%s=%s", k, v[0]))
-		}
-		if err := cmd.Command.Parse(args); err != nil {
-			httpError(w, err.Error(), http.StatusBadRequest)
-			return
 		}
 		id := strings.Replace(time.Now().Format("20060102-150405.999"), ".", "-", 1)
 		proc, err := newProcess(ctx, args)
@@ -237,58 +290,80 @@ func Serve(ctx context.Context, app string, cmds []*ffcli.Command, customPort in
 		// Log page
 		v := view.Log(app, id, proc.logs)
 		if err := v.Render(r.Context(), w); err != nil {
-			log.Println("couldn't render view:", err)
+			log.Println("webcli: couldn't render view:", err)
 		}
 	}))
 
-	// Create an HTTP server with the custom ServeMux
-	server := &http.Server{
-		Handler: mux,
+	return &Server{
+		Handler:    mux,
+		cancel:     cancel,
+		customAddr: customAddress,
+	}, nil
+}
+
+// Run starts the webcli server and blocks until the context is done.
+func (s *Server) Run(ctx context.Context) error {
+	// Start the server
+	if err := s.Start(ctx); err != nil {
+		return err
 	}
-
-	// Create a listener on a random port
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", customPort))
-	if err != nil {
-		return fmt.Errorf("failed to listen on a port: %v", err)
+	log.Println("webcli: server started on port", s.Port)
+	u := fmt.Sprintf("http://localhost:%d", s.Port)
+	if s.customAddr != ":0" {
+		u = s.customAddr
 	}
-	defer listener.Close()
-
-	// Extract the port from the listener address
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	// Log the port that the server is listening on
-	log.Printf("Server is listening on %s", listener.Addr().String())
-
-	// Start the server in a goroutine so that it doesn't block
-	go func() {
-		if err := server.Serve(listener); err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
-		}
-	}()
-
-	// Open the browser to the server URL if the port is not custom
-	u := fmt.Sprintf("http://localhost:%d", port)
-	if customPort == 0 {
-		if err := browser.OpenURL(u); err != nil {
-			log.Println("failed to open browser:", err)
-		}
-	}
-	fmt.Println("Open the following URL in your browser:", u)
+	log.Println("webcli: open", u, "in your browser")
 
 	// Wait for the context to be done
 	<-ctx.Done()
 
-	// Shutdown the server when the context is done
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// Stop the server
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("server shutdown failed: %v", err)
+	return s.Stop(ctx)
+}
+
+// Serve starts the webcli server.
+func (s *Server) Start(ctx context.Context) error {
+	// Create an HTTP server with the custom ServeMux
+	httpServer := &http.Server{
+		Handler: s.Handler,
 	}
+
+	// Create a listener on a random port or a custom address
+	addr := strings.TrimPrefix(s.customAddr, "https://")
+	addr = strings.TrimPrefix(addr, "http://")
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("webcli: failed to listen on a %s: %w", addr, err)
+	}
+
+	// Extract the port from the listener address
+	s.Port = listener.Addr().(*net.TCPAddr).Port
+	s.httpServer = httpServer
+
+	// Start the server in a goroutine so that it doesn't block
+	go func() {
+		if err := httpServer.Serve(listener); err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
 
 	return nil
 }
 
-func parseCommands(cmds []*ffcli.Command, parent string) []*parsedCommand {
+// Stop stops the webcli server.
+func (s *Server) Stop(ctx context.Context) error {
+	defer s.cancel()
+	if s.httpServer != nil {
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			return fmt.Errorf("webcli: server shutdown failed: %v", err)
+		}
+	}
+	return nil
+}
+
+func parseCommands(cmds []*Command, parent string) []*parsedCommand {
 	var all []*parsedCommand
 	for _, cmd := range cmds {
 		p := parseCommand(cmd, parent)
@@ -302,51 +377,23 @@ func parseCommands(cmds []*ffcli.Command, parent string) []*parsedCommand {
 	return all
 }
 
-func parseCommand(cmd *ffcli.Command, parent string) *parsedCommand {
+func parseCommand(cmd *Command, parent string) *parsedCommand {
 	name := cmd.Name
 	if parent != "" {
 		name = fmt.Sprintf("%s/%s", parent, name)
 	}
 	parsed := &parsedCommand{
 		Name:        name,
-		Description: cmd.ShortHelp + "\n" + cmd.LongHelp,
-		Command:     cmd,
+		Description: cmd.Description,
+		Fields:      cmd.Fields,
 	}
-	fs := cmd.FlagSet
-	if fs == nil {
+	if len(cmd.Fields) == 0 {
 		// If it doesn't have flags, it's just a holder of subcommands
 		if len(cmd.Subcommands) > 0 {
 			return nil
 		}
 		return parsed
 	}
-	fields := []view.Field{}
-	cmd.FlagSet.VisitAll(func(f *flag.Flag) {
-		t := fmt.Sprintf("%T", f.Value)
-		field := view.Field{
-			Name:        f.Name,
-			Default:     f.DefValue,
-			Description: f.Usage,
-		}
-		switch t {
-		case "*flag.boolValue":
-			field.Type = view.Boolean
-		case "*flag.durationValue":
-			field.Type = view.Text
-		case "*flag.float64Value":
-			field.Type = view.Number
-		case "*flag.intValue", "*flag.int64Value":
-			field.Type = view.Number
-		case "*flag.stringValue":
-			field.Type = view.Text
-		case "*flag.uintValue", "*flag.uint64Value":
-			field.Type = view.Number
-		default:
-			field.Type = view.Text
-		}
-		fields = append(fields, field)
-	})
-	parsed.Fields = fields
 	return parsed
 }
 
