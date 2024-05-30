@@ -34,7 +34,7 @@ func main() {
 }
 
 func newCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("example", flag.ExitOnError)
+	fs := flag.NewFlagSet("webff", flag.ExitOnError)
 
 	cmds := []*ffcli.Command{
 		newVersionCommand(),
@@ -43,7 +43,7 @@ func newCommand() *ffcli.Command {
 	port := fs.Int("port", 0, "port number")
 
 	return &ffcli.Command{
-		ShortUsage: "webcli [flags] <subcommand>",
+		ShortUsage: "webff [flags] <subcommand>",
 		FlagSet:    fs,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -66,7 +66,7 @@ func newCommand() *ffcli.Command {
 func newVersionCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "version",
-		ShortUsage: "webcli version",
+		ShortUsage: "webff version",
 		ShortHelp:  "print version",
 		Exec: func(ctx context.Context, args []string) error {
 			v := version
@@ -102,13 +102,13 @@ func newRunCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       cmd,
-		ShortUsage: fmt.Sprintf("webcli %s [flags] <key> <value data...>", cmd),
+		ShortUsage: fmt.Sprintf("webff %s [flags] <key> <value data...>", cmd),
 		Options: []ff.Option{
 			ff.WithConfigFileFlag("config"),
 			ff.WithConfigFileParser(ff.PlainParser),
-			ff.WithEnvVarPrefix("webcli"),
+			ff.WithEnvVarPrefix("webff"),
 		},
-		ShortHelp: fmt.Sprintf("webcli %s command", cmd),
+		ShortHelp: fmt.Sprintf("webff %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
 			log.Println("running")
@@ -139,13 +139,13 @@ func newJumpCommand(parent string) *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       cmd,
-		ShortUsage: fmt.Sprintf("webcli %s %s [flags] <key> <value data...>", parent, cmd),
+		ShortUsage: fmt.Sprintf("webff %s %s [flags] <key> <value data...>", parent, cmd),
 		Options: []ff.Option{
 			ff.WithConfigFileFlag("config"),
 			ff.WithConfigFileParser(ff.PlainParser),
-			ff.WithEnvVarPrefix("webcli"),
+			ff.WithEnvVarPrefix("webff"),
 		},
-		ShortHelp: fmt.Sprintf("webcli %s %s command", parent, cmd),
+		ShortHelp: fmt.Sprintf("webff %s %s command", parent, cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
 			log.Println("running")

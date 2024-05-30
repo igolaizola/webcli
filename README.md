@@ -8,8 +8,14 @@ The tool has direct compatibility with `github.com/peterbourgon/ff/v3` and `gith
 
 ## Usage
 
-You have an example CLI at `cmd/webff/main.go` that you can run with:
+You have an example using a `ff` CLI at `cmd/webff/main.go` that you can run with:
 
 ```bash
 go run cmd/webff/main.go
+```
+
+You have an example using a `cobra` CLI at `cmd/webcobra/main.go` that you can run with:
+
+```bash
+go run cmd/webcobra/main.go
 ```

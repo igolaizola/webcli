@@ -273,7 +273,7 @@ func New(cfg *Config) (*Server, error) {
 			case "off":
 				value = "false"
 			}
-			args = append(args, fmt.Sprintf("-%s=%s", k, v[0]))
+			args = append(args, fmt.Sprintf("--%s=%s", k, v[0]))
 		}
 		id := strings.Replace(time.Now().Format("20060102-150405.999"), ".", "-", 1)
 		proc, err := newProcess(ctx, args)
@@ -307,12 +307,11 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := s.Start(ctx); err != nil {
 		return err
 	}
-	log.Println("webcli: server started on port", s.Port)
 	u := fmt.Sprintf("http://localhost:%d", s.Port)
 	if s.customAddr != ":0" {
 		u = s.customAddr
 	}
-	log.Println("webcli: open", u, "in your browser")
+	fmt.Println("Open in your browser", u)
 
 	// Wait for the context to be done
 	<-ctx.Done()
@@ -371,7 +370,7 @@ func parseCommands(cmds []*Command, parent string) []*parsedCommand {
 			all = append(all, p)
 		}
 		if cmd.Subcommands != nil {
-			all = append(all, parseCommands(cmd.Subcommands, p.Name)...)
+			all = append(all, parseCommands(cmd.Subcommands, cmd.Name)...)
 		}
 	}
 	return all

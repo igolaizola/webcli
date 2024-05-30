@@ -31,6 +31,9 @@ func toCommand(c *ffcli.Command) *webcli.Command {
 
 func toFields(fs *flag.FlagSet) []*webcli.Field {
 	var fields []*webcli.Field
+	if fs == nil {
+		return fields
+	}
 	fs.VisitAll(func(f *flag.Flag) {
 		fields = append(fields, &webcli.Field{
 			Name:        f.Name,
