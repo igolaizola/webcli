@@ -2,6 +2,7 @@ package webcli
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log"
 	"net"
@@ -56,6 +57,9 @@ type Server struct {
 	httpServer *http.Server
 }
 
+//go:embed static/*
+var staticContent embed.FS
+
 // Server serves the webcli server.
 func New(cfg *Config) (*Server, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,6 +86,9 @@ func New(cfg *Config) (*Server, error) {
 
 	// Multiplexer for the server
 	mux := http.NewServeMux()
+
+	// Static files handler
+	mux.Handle("/static/", http.FileServer(http.FS(staticContent)))
 
 	// Index page handler
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
