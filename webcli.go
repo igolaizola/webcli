@@ -280,7 +280,7 @@ func New(cfg *Config) (*Server, error) {
 			case "off":
 				value = "false"
 			}
-			args = append(args, fmt.Sprintf("--%s=%s", k, v[0]))
+			args = append(args, fmt.Sprintf("--%s=%s", k, value))
 		}
 		id := strings.Replace(time.Now().Format("20060102-150405.999"), ".", "-", 1)
 		proc, err := newProcess(ctx, args)
