@@ -113,13 +113,14 @@ func newRunCommand() *cobra.Command {
 	cmd.Flags().Int("attempts", 0, "int")
 	cmd.Flags().Bool("debug", false, "bool")
 	cmd.Flags().Float64("price", 0, "float64")
+	cmd.Flags().StringArray("tags", []string{"bar", "foo"}, "tags")
 
-	cmd.AddCommand(newJumpCommand("run"))
+	cmd.AddCommand(newSubRunCommand(cmd.Name()))
 
 	return cmd
 }
 
-func newJumpCommand(parent string) *cobra.Command {
+func newSubRunCommand(parent string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subrun",
 		Short: fmt.Sprintf("webcobra %s subrun command", parent),
@@ -142,6 +143,7 @@ func newJumpCommand(parent string) *cobra.Command {
 	cmd.Flags().Int("attempts", 0, "int")
 	cmd.Flags().Bool("debug", false, "bool")
 	cmd.Flags().Float64("price", 0, "float64")
+	cmd.Flags().StringArray("tags", []string{"bar", "foo"}, "tags")
 
 	return cmd
 }

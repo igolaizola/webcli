@@ -41,30 +41,35 @@ func toFields(fss ...*pflag.FlagSet) []*webcli.Field {
 			if _, ok := lookup[f.Name]; ok {
 				return
 			}
+			typ, arr := toType(f)
 			lookup[f.Name] = f.Name
 			fields = append(fields, &webcli.Field{
 				Name:        f.Name,
 				Default:     f.Value.String(),
 				Description: f.Usage,
-				Type:        toType(f),
+				Type:        typ,
+				Array:       arr,
 			})
 		})
 	}
 	return fields
 }
 
-func toType(f *pflag.Flag) webcli.FieldType {
-	switch f.Value.Type() {
+func toType(f *pflag.Flag) (webcli.FieldType, bool) {
+	t := f.Value.Type()
+	switch t {
 	case "bool":
-		return webcli.Boolean
+		return webcli.Boolean, false
 	case "duration":
-		return webcli.Text
+		return webcli.Text, false
 	case "float64", "int", "int64", "uint", "uint64":
-		return webcli.Number
+		return webcli.Number, false
 	case "string":
-		return webcli.Text
+		return webcli.Text, false
+	case "stringArray":
+		return webcli.Text, true
 	default:
-		return webcli.Text
+		return webcli.Text, false
 	}
 }
 

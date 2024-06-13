@@ -26,6 +26,7 @@ type Field struct {
 	Default     string
 	Description string
 	Type        FieldType
+	Array       bool
 }
 
 type FieldType int
@@ -125,6 +126,7 @@ func New(cfg *Config) (*Server, error) {
 					Default:     f.Default,
 					Description: f.Description,
 					Type:        t,
+					Array:       f.Array,
 				}
 
 				fields = append(fields, vf)

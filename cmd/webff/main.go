@@ -123,12 +123,12 @@ func newRunCommand() *ffcli.Command {
 			return nil
 		},
 		Subcommands: []*ffcli.Command{
-			newJumpCommand(cmd),
+			newSubRunCommand(cmd),
 		},
 	}
 }
 
-func newJumpCommand(parent string) *ffcli.Command {
+func newSubRunCommand(parent string) *ffcli.Command {
 	cmd := "subrun"
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	_ = fs.String("config", "", "config file (optional)")
