@@ -127,6 +127,14 @@ func WithDisableConfig() Option {
 	}
 }
 
+// WithDebug enables debug mode.
+func WithDebug() Option {
+	return func(o *options) error {
+		o.debug = true
+		return nil
+	}
+}
+
 type options struct {
 	app     string
 	address string
@@ -135,6 +143,8 @@ type options struct {
 	configPath    func(cmdName string) string
 	readConfig    func(path string) (map[string]any, error)
 	writeConfig   func(path string, values map[string]any) error
+
+	debug bool
 }
 
 type Server struct {
@@ -504,7 +514,7 @@ func New(commands []*Command, opts ...Option) (*Server, error) {
 			}
 		}
 		id := strings.Replace(time.Now().Format("20060102-150405.999"), ".", "-", 1)
-		proc, err := newProcess(ctx, args)
+		proc, err := newProcess(ctx, args, o.debug)
 		if err != nil {
 			httpError(w, err.Error(), http.StatusInternalServerError)
 			return

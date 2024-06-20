@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -42,7 +43,7 @@ func (p *process) Unsubscribe(id string) {
 	delete(p.callbacks, id)
 }
 
-func newProcess(ctx context.Context, args []string) (*process, error) {
+func newProcess(ctx context.Context, args []string, debug bool) (*process, error) {
 	if len(args) == 0 {
 		return nil, errors.New("no command provided")
 	}
@@ -59,6 +60,11 @@ func newProcess(ctx context.Context, args []string) (*process, error) {
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("error launching instance: %w", err)
+	}
+	if debug {
+		output := fmt.Sprintf("> %s\n", strings.Join(args, " "))
+		log.Println(output)
+		combinedOutput = io.MultiReader(strings.NewReader(output), combinedOutput)
 	}
 
 	// Create the process that handles the output
