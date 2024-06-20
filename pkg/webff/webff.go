@@ -71,11 +71,6 @@ type Config struct {
 	Address  string
 }
 
-func New(cfg *Config) (*webcli.Server, error) {
-	webcliConfig := &webcli.Config{
-		App:      cfg.App,
-		Commands: Parse(cfg.Commands),
-		Address:  cfg.Address,
-	}
-	return webcli.New(webcliConfig)
+func New(commands []*ffcli.Command, opts ...webcli.Option) (*webcli.Server, error) {
+	return webcli.New(Parse(commands), opts...)
 }

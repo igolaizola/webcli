@@ -73,17 +73,6 @@ func toType(f *pflag.Flag) (webcli.FieldType, bool) {
 	}
 }
 
-type Config struct {
-	App      string
-	Commands []*cobra.Command
-	Address  string
-}
-
-func New(cfg *Config) (*webcli.Server, error) {
-	webcliConfig := &webcli.Config{
-		App:      cfg.App,
-		Commands: Parse(cfg.Commands),
-		Address:  cfg.Address,
-	}
-	return webcli.New(webcliConfig)
+func New(commands []*cobra.Command, opts ...webcli.Option) (*webcli.Server, error) {
+	return webcli.New(Parse(commands), opts...)
 }

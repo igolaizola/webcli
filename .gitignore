@@ -20,3 +20,4 @@ tmp
 .history
 .vscode
 *.conf
+cfg/

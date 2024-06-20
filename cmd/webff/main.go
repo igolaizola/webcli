@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/igolaizola/webcli"
 	"github.com/igolaizola/webcli/pkg/webff"
 	"github.com/peterbourgon/ff/v3"
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -47,11 +48,7 @@ func newCommand() *ffcli.Command {
 		FlagSet:    fs,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
-				s, err := webff.New(&webff.Config{
-					App:      fs.Name(),
-					Commands: cmds,
-					Address:  fmt.Sprintf(":%d", *port),
-				})
+				s, err := webff.New(cmds, webcli.WithAppName(fs.Name()), webcli.WithAddress(fmt.Sprintf(":%d", *port)))
 				if err != nil {
 					return err
 				}

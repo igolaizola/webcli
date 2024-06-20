@@ -7,10 +7,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/igolaizola/webcli/pkg/config"
 	"github.com/igolaizola/webcli/pkg/view"
 )
 
@@ -43,10 +45,96 @@ type parsedCommand struct {
 	Description string
 }
 
-type Config struct {
-	App      string
-	Commands []*Command
-	Address  string
+type Option func(*options) error
+
+// WithAppName sets the application name.
+// The application name is used in the title of the web page.
+func WithAppName(name string) Option {
+	return func(o *options) error {
+		o.app = name
+		return nil
+	}
+}
+
+// WithAddress sets the address where the server will listen.
+// The address should be in the format "host:port".
+func WithAddress(addr string) Option {
+	return func(o *options) error {
+		if addr == "" {
+			return fmt.Errorf("webcli: address can't be empty")
+		}
+		o.address = addr
+		return nil
+	}
+}
+
+// WithConfigPath sets the function to generate the path of the config file.
+// The function receives the command name and should return the path of the
+// config file.
+// By default, the config file is located in the "cfg" folder with the name of
+// the command in YAML format.
+func WithConfigPath(fn func(cmdName string) string) Option {
+	return func(o *options) error {
+		if fn == nil {
+			return fmt.Errorf("webcli: config path function can't be nil")
+		}
+		o.configPath = fn
+		return nil
+	}
+}
+
+// DefaultYAMLConfigPath returns the default path for the config file in YAML
+// format.
+var DefaultYAMLConfigPath = func(cmdName string) string {
+	cmdName = strings.ReplaceAll(cmdName, "/", ".")
+	return fmt.Sprintf("cfg/%s.yaml", cmdName)
+}
+
+// DefaultJSONConfigPath returns the default path for the config file in JSON
+// format.
+var DefaultJSONConfigPath = func(cmdName string) string {
+	cmdName = strings.ReplaceAll(cmdName, "/", ".")
+	return fmt.Sprintf("cfg/%s.json", cmdName)
+}
+
+// WithReadConfig sets the function to read the config file.
+func WithReadConfig(fn func(path string) (map[string]any, error)) Option {
+	return func(o *options) error {
+		if fn == nil {
+			o.disableConfig = true
+		}
+		o.readConfig = fn
+		return nil
+	}
+}
+
+// WithWriteConfig sets the function to write the config file.
+func WithWriteConfig(fn func(path string, values map[string]any) error) Option {
+	return func(o *options) error {
+		if fn == nil {
+			return fmt.Errorf("webcli: write config function can't be nil")
+		}
+		o.writeConfig = fn
+		return nil
+	}
+}
+
+// WithDisableConfig disables the config file.
+func WithDisableConfig() Option {
+	return func(o *options) error {
+		o.disableConfig = true
+		return nil
+	}
+}
+
+type options struct {
+	app     string
+	address string
+
+	disableConfig bool
+	configPath    func(cmdName string) string
+	readConfig    func(path string) (map[string]any, error)
+	writeConfig   func(path string, values map[string]any) error
 }
 
 type Server struct {
@@ -62,20 +150,32 @@ type Server struct {
 var staticContent embed.FS
 
 // Server serves the webcli server.
-func New(cfg *Config) (*Server, error) {
+func New(commands []*Command, opts ...Option) (*Server, error) {
+	// Default options
+	o := &options{
+		app:        "WebCLI",
+		address:    ":0",
+		configPath: DefaultYAMLConfigPath,
+		readConfig: func(path string) (map[string]any, error) {
+			return config.Read(path)
+		},
+		writeConfig: func(path string, values map[string]any) error {
+			return config.Write(path, values)
+		},
+	}
+
+	// Override options
+	for _, opt := range opts {
+		if err := opt(o); err != nil {
+			return nil, err
+		}
+	}
+
+	// Create a context for handling the server
 	ctx, cancel := context.WithCancel(context.Background())
 
-	app := "WebCLI"
-	if cfg.App != "" {
-		app = cfg.App
-	}
-	customAddress := ":0"
-	if cfg.Address != "" {
-		customAddress = cfg.Address
-	}
-
 	// Convert command tree to a flat list
-	parsedCmds := parseCommands(cfg.Commands, "")
+	parsedCmds := parseCommands(commands, "")
 
 	// Create lookup and name list
 	var cmdLookup = map[string]*parsedCommand{}
@@ -101,7 +201,7 @@ func New(cfg *Config) (*Server, error) {
 				Description: cmdLookup[name].Description,
 			})
 		}
-		v := view.List(app, cmds)
+		v := view.List(o.app, cmds)
 		if err := v.Render(r.Context(), w); err != nil {
 			log.Println("webcli: couldn't render view:", err)
 		}
@@ -112,6 +212,24 @@ func New(cfg *Config) (*Server, error) {
 		path := fmt.Sprintf("/commands/%s", name)
 		mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("HX-Push-Url", path)
+
+			// Check if the form should use default values
+			useDefault := len(r.URL.Query()["default"]) > 0
+
+			// Read values from the config file
+			configValues := map[string]string{}
+			if !o.disableConfig && !useDefault {
+				candidate, err := o.readConfig(o.configPath(name))
+				if err != nil {
+					log.Println("webcli:", err)
+				} else {
+					for k, v := range candidate {
+						configValues[k] = fmt.Sprintf("%v", v)
+					}
+				}
+			}
+
+			// Create form fields
 			var fields []view.Field
 			for _, f := range cmd.Fields {
 				t := view.Text
@@ -121,17 +239,25 @@ func New(cfg *Config) (*Server, error) {
 				case Boolean:
 					t = view.Boolean
 				}
+				def := f.Default
+
+				// Check if the value is in the config file
+				if v, ok := configValues[f.Name]; ok {
+					def = v
+				}
+
 				vf := view.Field{
 					Name:        f.Name,
-					Default:     f.Default,
+					Default:     def,
 					Description: f.Description,
 					Type:        t,
 					Array:       f.Array,
 				}
-
 				fields = append(fields, vf)
 			}
-			v := view.Form(app, name, fields)
+
+			// Render the form
+			v := view.Form(o.app, name, fields, !o.disableConfig)
 			if err := v.Render(r.Context(), w); err != nil {
 				log.Println("webcli: couldn't render view:", err)
 			}
@@ -216,7 +342,7 @@ func New(cfg *Config) (*Server, error) {
 				Canceled: p.canceled,
 			})
 		}
-		v := view.ListLog(app, logs)
+		v := view.ListLog(o.app, logs)
 		if err := v.Render(r.Context(), w); err != nil {
 			log.Println("webcli: couldn't render view:", err)
 		}
@@ -235,7 +361,7 @@ func New(cfg *Config) (*Server, error) {
 			proc.cancel()
 		}
 		w.Header().Set("HX-Push-Url", fmt.Sprintf("/logs/%s", id))
-		v := view.Log(app, id, proc.Logs())
+		v := view.Log(o.app, id, proc.Logs())
 		if err := v.Render(r.Context(), w); err != nil {
 			log.Println("webcli: couldn't render view:", err)
 		}
@@ -248,6 +374,98 @@ func New(cfg *Config) (*Server, error) {
 	mux.Handle("/cancel/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logHandler(w, r, true)
 	}))
+
+	// Command save handler
+	if !o.disableConfig {
+		mux.Handle("/close", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		mux.Handle("/save", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Only post method is allowed
+			if r.Method != http.MethodPost {
+				httpError(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			// Parse form
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// Get command name
+			cmdName := r.FormValue("command")
+			if cmdName == "" {
+				httpError(w, "command field is empty", http.StatusBadRequest)
+				return
+			}
+			cmd, ok := cmdLookup[cmdName]
+			if !ok {
+				httpError(w, "command not found", http.StatusNotFound)
+				return
+			}
+
+			// Get fields from the form
+			var fields = map[string][]string{}
+			for k, vs := range r.Form {
+				if k == "command" {
+					continue
+				}
+				if len(vs) == 0 {
+					continue
+				}
+				for _, v := range vs {
+					if _, ok := fields[k]; !ok {
+						fields[k] = []string{}
+					}
+					fields[k] = append(fields[k], v)
+				}
+			}
+
+			// Convert values to a map of single values if not an array
+			var values = map[string]any{}
+			for _, f := range cmd.Fields {
+				if vs, ok := fields[f.Name]; ok {
+					switch {
+					case f.Array:
+						if len(vs) == 1 && vs[0] == "" {
+							values[f.Name] = []string{}
+						} else {
+							values[f.Name] = vs
+						}
+					case f.Type == Boolean:
+						values[f.Name] = vs[0] == "on"
+					case f.Type == Number:
+						if num, err := strconv.Atoi(vs[0]); err == nil {
+							values[f.Name] = num
+						} else if num, err := strconv.ParseFloat(vs[0], 64); err == nil {
+							values[f.Name] = num
+						} else {
+							values[f.Name] = 0
+						}
+					default:
+						values[f.Name] = vs[0]
+					}
+				}
+			}
+
+			// Write values to the config file
+			if err := o.writeConfig(o.configPath(cmdName), values); err != nil {
+				log.Println("webcli:", err)
+				v := view.SaveError()
+				if err := v.Render(r.Context(), w); err != nil {
+					log.Println("webcli: couldn't render view:", err)
+				}
+				return
+			}
+
+			// Save modal
+			v := view.Save()
+			if err := v.Render(r.Context(), w); err != nil {
+				log.Println("webcli: couldn't render view:", err)
+			}
+		}))
+	}
 
 	// Command run handler
 	mux.Handle("/run", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,19 +488,20 @@ func New(cfg *Config) (*Server, error) {
 			return
 		}
 		args := []string{cmdName}
-		for k, v := range r.Form {
+		for k, vs := range r.Form {
 			if k == "command" {
 				continue
 			}
-			// Convert checkbox on/off to true/false
-			value := v[0]
-			switch value {
-			case "on":
-				value = "true"
-			case "off":
-				value = "false"
+			for _, value := range vs {
+				// Convert checkbox on/off to true/false
+				switch value {
+				case "on":
+					value = "true"
+				case "off":
+					value = "false"
+				}
+				args = append(args, fmt.Sprintf("--%s=%s", k, value))
 			}
-			args = append(args, fmt.Sprintf("--%s=%s", k, value))
 		}
 		id := strings.Replace(time.Now().Format("20060102-150405.999"), ".", "-", 1)
 		proc, err := newProcess(ctx, args)
@@ -297,7 +516,7 @@ func New(cfg *Config) (*Server, error) {
 		// Replace URL
 		w.Header().Set("HX-Push-Url", fmt.Sprintf("/logs/%s", id))
 		// Log page
-		v := view.Log(app, id, proc.logs)
+		v := view.Log(o.app, id, proc.logs)
 		if err := v.Render(r.Context(), w); err != nil {
 			log.Println("webcli: couldn't render view:", err)
 		}
@@ -306,7 +525,7 @@ func New(cfg *Config) (*Server, error) {
 	return &Server{
 		Handler:    mux,
 		cancel:     cancel,
-		customAddr: customAddress,
+		customAddr: o.address,
 	}, nil
 }
 

@@ -21,7 +21,7 @@ type Field struct {
 	Array       bool
 }
 
-templ form(command string, fields []Field) {
+templ form(command string, fields []Field, save bool) {
 	<script type="text/javascript">
 	function addField(id) {
 	    var src = document.getElementById(id);
@@ -41,7 +41,7 @@ templ form(command string, fields []Field) {
 		}
 	}
 	</script>
-	<form hx-post="/run" hx-target="#content" hx-select="#content" hx-swap="outerHTML">
+	<form>
 		<input type="hidden" id="command" name="command" value={ command }/>
 		<div class="space-y-12">
 			<div class="border-b border-gray-900/10 pb-12">
@@ -64,12 +64,32 @@ templ form(command string, fields []Field) {
 			</div>
 		</div>
 		<div class="mt-6 flex items-center justify-end gap-x-6">
+			if save {
+				<button
+					hx-get={ "/commands/" + command + "?default" }
+					hx-target="#content"
+					hx-select="#content"
+					hx-swap="outerHTML"
+					class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+				>Reset</button>
+				<button
+					hx-post="/save"
+					hx-target="form"
+					hx-swap="afterend"
+					class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+				>Save</button>
+			}
 			<button
+				hx-post="/run"
+				hx-target="#content"
+				hx-select="#content"
+				hx-swap="outerHTML"
 				type="submit"
 				class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
 			>Launch</button>
 		</div>
 	</form>
+	<div id="modal"></div>
 }
 
 templ textField(f Field) {
@@ -191,8 +211,8 @@ templ removeButton(hidden bool) {
 	</button>
 }
 
-templ Form(app string, command string, fields []Field) {
+templ Form(app string, command string, fields []Field, save bool) {
 	@page(app, fmt.Sprintf("Launch '%s'", command)) {
-		@form(command, fields)
+		@form(command, fields, save)
 	}
 }

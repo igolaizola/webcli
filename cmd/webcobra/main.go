@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/igolaizola/webcli"
 	"github.com/igolaizola/webcli/pkg/webcobra"
 	"github.com/spf13/cobra"
 )
@@ -38,11 +39,7 @@ func newCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				port, _ := cmd.Flags().GetInt("port")
-				s, err := webcobra.New(&webcobra.Config{
-					App:      cmd.Name(),
-					Commands: cmd.Commands(),
-					Address:  fmt.Sprintf(":%d", port),
-				})
+				s, err := webcobra.New(cmd.Commands(), webcli.WithAppName(cmd.Name()), webcli.WithAddress(fmt.Sprintf(":%d", port)))
 				if err != nil {
 					return err
 				}
