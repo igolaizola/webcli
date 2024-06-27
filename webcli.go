@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -352,6 +353,10 @@ func New(commands []*Command, opts ...Option) (*Server, error) {
 				Canceled: p.canceled,
 			})
 		}
+		// Order from newest to oldest
+		sort.Slice(logs, func(i, j int) bool {
+			return logs[i].Start.After(logs[j].Start)
+		})
 		v := view.ListLog(o.app, logs)
 		if err := v.Render(r.Context(), w); err != nil {
 			log.Println("webcli: couldn't render view:", err)
