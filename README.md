@@ -2,17 +2,21 @@
 
 **webcli** is a tool to generate an automatic web UI on top of a Golang CLI
 
-<p align="center"><img src="webcli.png" width="300"></p>
+<p align="center"><img src="images/webcli.png" width="300"></p>
+<p align="center">
+  <img src="images/webcli-screenshot-commands.png" width="390">
+  <img src="images/webcli-screenshot-logs.png" width="390">
+</p>
 
 ## 🚀 Features
 
- - List all commands and subcommands
- - Edit the flags of the commands using input fields
- - Launch commands in the background
- - See the output of the commands in real-time
- - List and view the output of all the commands launched
- - Load command flags from configuration files
- - Save command flags to configuration files
+- List all commands and subcommands
+- Edit the flags of the commands using input fields
+- Launch commands in the background
+- See the output of the commands in real-time
+- List and view the output of all the commands launched
+- Load command flags from configuration files
+- Save command flags to configuration files
 
 ## 🔌 Compatibility
 
@@ -38,9 +42,9 @@ go run cmd/webcobra/main.go
 
 Resources used to create this project:
 
- - [HTMX](https://htmx.org/)
- - [Tailwind CSS](https://tailwindcss.com/)
- - [templ](https://templ.guide) - An HTML templating language for Go
+- [HTMX](https://htmx.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [templ](https://templ.guide) - An HTML templating language for Go
 
 ## 💖 Support
 
