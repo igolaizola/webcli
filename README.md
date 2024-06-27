@@ -34,6 +34,14 @@ You can find an example using a `cobra` CLI at [cmd/webcobra/main.go](cmd/webcob
 go run cmd/webcobra/main.go
 ```
 
+## 📚 Resources
+
+Resources used to create this project:
+
+ - [HTMX](https://htmx.org/)
+ - [Tailwind CSS](https://tailwindcss.com/)
+ - [templ](https://templ.guide) - An HTML templating language for Go
+
 ## 💖 Support
 
 Please give the repository a star ⭐ if you have found this code helpful.
